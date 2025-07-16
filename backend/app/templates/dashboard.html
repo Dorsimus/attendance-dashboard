@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏢 Redstone Attendance Intelligence Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .redstone-gradient {
+            background: linear-gradient(135deg, #ff3443 0%, #0127a2 100%);
+        }
+        
+        .card-shadow {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        .live-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .slide-in {
+            animation: slideIn 0.5s ease-out;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .status-online {
+            background: #10b981;
+            box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2);
+        }
+        
+        .status-warning {
+            background: #f59e0b;
+            box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.2);
+        }
+        
+        .status-critical {
+            background: #ef4444;
+            box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2);
+        }
+
+        .metric-card {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.15);
+        }
+
+        .modal-backdrop {
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-content {
+            animation: modalSlideIn 0.3s ease-out;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-50px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Header -->
+    <header class="redstone-gradient text-white">
+        <div class="container mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <div class="text-2xl font-bold">🏢 Redstone Intelligence</div>
+                    <div class="bg-white bg-opacity-20 px-3 py-1 rounded-full text-sm">
+                        <span class="status-indicator live-pulse status-online"></span>
+                        Live Dashboard
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="text-sm">
+                        <div id="current-time" class="font-medium"></div>
+                        <div class="text-xs opacity-80">Last Updated: <span id="last-updated">--</span></div>
+                    </div>
+                    <button id="refresh-btn" class="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg transition-colors">
+                        🔄 Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Dashboard -->
+    <main class="container mx-auto px-6 py-8">
+        <!-- Key Metrics Row -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Attendance Rate -->
+            <div class="bg-white rounded-xl card-shadow p-6 slide-in metric-card" onclick="dashboard.showMetricDetails('attendance')">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="text-sm font-medium text-gray-500">ATTENDANCE RATE</div>
+                    <div class="text-2xl">📊</div>
+                </div>
+                <div class="text-3xl font-bold text-gray-900 mb-2" id="attendance-rate">85.5%</div>
+                <div class="flex items-center text-sm">
+                    <span class="text-green-600 bg-green-100 px-2 py-1 rounded-full text-xs font-medium" id="attendance-change">+2.3%</span>
+                    <span class="text-gray-500 ml-2">vs last week</span>
+                </div>
+                <div class="text-xs text-gray-400 mt-2">Click for details</div>
+            </div>
+
+            <!-- Present Count -->
+            <div class="bg-white rounded-xl card-shadow p-6 slide-in metric-card" onclick="dashboard.showMetricDetails('present')">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="text-sm font-medium text-gray-500">PRESENT TODAY</div>
+                    <div class="text-2xl">👥</div>
+                </div>
+                <div class="text-3xl font-bold text-gray-900 mb-2" id="present-count">342</div>
+                <div class="text-sm text-gray-500">of <span id="total-employees">400</span> employees</div>
+                <div class="text-xs text-gray-400 mt-2">Click for details</div>
+            </div>
+
+            <!-- At Risk -->
+            <div class="bg-white rounded-xl card-shadow p-6 slide-in">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="text-sm font-medium text-gray-500">AT RISK</div>
+                    <div class="text-2xl">⚠️</div>
+                </div>
+                <div class="text-3xl font-bold text-red-600 mb-2" id="at-risk-count">5</div>
+                <div class="text-sm text-gray-500">Need immediate action</div>
+            </div>
+
+            <!-- Engagement -->
+            <div class="bg-white rounded-xl card-shadow p-6 slide-in">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="text-sm font-medium text-gray-500">ENGAGEMENT</div>
+                    <div class="text-2xl">⭐</div>
+                </div>
+                <div class="text-3xl font-bold text-gray-900 mb-2" id="engagement-score">78</div>
+                <div class="text-sm text-gray-500">Average score /100</div>
+            </div>
+        </div>
+
+        <!-- Charts and Alerts Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <!-- Attendance Trend Chart -->
+            <div class="lg:col-span-2 bg-white rounded-xl card-shadow p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">📈 8-Week Attendance Trend</h3>
+                <div class="h-64">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Alerts Panel -->
+            <div class="bg-white rounded-xl card-shadow p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">🚨 Live Alerts</h3>
+                <div id="alerts-container" class="space-y-3">
+                    <!-- Alerts will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Leadership Attendance -->
+        <div class="bg-white rounded-xl card-shadow p-6 mb-8">
+            <h3 class="text-lg font-semibold text-gray-900 mb-6">👥 Leadership Attendance</h3>
+            
+            <!-- Regional Managers Section -->
+            <div class="mb-8">
+                <h4 class="text-md font-medium text-gray-700 mb-4">Regional Managers</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="regional-managers-grid">
+                    <!-- Regional managers will be populated here -->
+                </div>
+            </div>
+            
+            <!-- Area Managers Section -->
+            <div>
+                <h4 class="text-md font-medium text-gray-700 mb-4">Area Managers</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="area-managers-grid">
+                    <!-- Area managers will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- At-Risk Employees -->
+        <div class="bg-white rounded-xl card-shadow p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">👤 At-Risk Employees</h3>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="text-left text-sm font-medium text-gray-500 border-b">
+                            <th class="pb-2">Name</th>
+                            <th class="pb-2">Location</th>
+                            <th class="pb-2">Risk Score</th>
+                            <th class="pb-2">4-Week Rate</th>
+                            <th class="pb-2">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="at-risk-table">
+                        <!-- At-risk employees will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- WebSocket Connection Status -->
+    <div id="connection-status" class="fixed bottom-4 right-4 bg-white rounded-lg shadow-lg p-3 border-l-4 border-green-500">
+        <div class="flex items-center text-sm">
+            <div class="status-indicator status-online"></div>
+            <span class="font-medium">Connected</span>
+        </div>
+    </div>
+
+    <script>
+        // Dashboard JavaScript
+        class AttendanceDashboard {
+            constructor() {
+                this.ws = null;
+                this.reconnectInterval = null;
+                this.chartInstance = null;
+                this.init();
+            }
+
+            init() {
+                this.setupWebSocket();
+                this.setupEventListeners();
+                this.updateTime();
+                this.loadInitialData();
+                
+                // Update time every second
+                setInterval(() => this.updateTime(), 1000);
+            }
+
+            setupWebSocket() {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/ws/dashboard`;
+                
+                this.ws = new WebSocket(wsUrl);
+                
+                this.ws.onopen = () => {
+                    console.log('🟢 WebSocket connected');
+                    this.updateConnectionStatus('connected');
+                    if (this.reconnectInterval) {
+                        clearInterval(this.reconnectInterval);
+                        this.reconnectInterval = null;
+                    }
+                };
+                
+                this.ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    this.handleWebSocketMessage(data);
+                };
+                
+                this.ws.onclose = () => {
+                    console.log('🔴 WebSocket disconnected');
+                    this.updateConnectionStatus('disconnected');
+                    this.attemptReconnect();
+                };
+                
+                this.ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                    this.updateConnectionStatus('error');
+                };
+            }
+
+            attemptReconnect() {
+                if (!this.reconnectInterval) {
+                    this.reconnectInterval = setInterval(() => {
+                        console.log('🔄 Attempting to reconnect...');
+                        this.setupWebSocket();
+                    }, 5000);
+                }
+            }
+
+            handleWebSocketMessage(data) {
+                switch (data.type) {
+                    case 'initial_data':
+                        this.updateDashboard(data.data);
+                        break;
+                    case 'periodic_update':
+                        this.updateDashboard(data.data);
+                        break;
+                    case 'alert_acknowledged':
+                        this.removeAlert(data.alert_id);
+                        break;
+                    case 'pong':
+                        // Handle ping/pong
+                        break;
+                    default:
+                        console.log('Unknown message type:', data.type);
+                }
+            }
+
+            async loadInitialData() {
+                try {
+                    const response = await fetch('/api/dashboard/data');
+                    const data = await response.json();
+                    this.updateDashboard(data);
+                } catch (error) {
+                    console.error('Error loading initial data:', error);
+                }
+            }
+
+            updateDashboard(data) {
+                // Update metrics
+                if (data.metrics) {
+                    this.updateMetrics(data.metrics);
+                }
+                
+                // Update alerts
+                if (data.alerts) {
+                    this.updateAlerts(data.alerts);
+                }
+                
+                // Update regional data
+                if (data.regional_data) {
+                    this.updateRegionalData(data.regional_data);
+                }
+                
+                // Update chart
+                if (data.attendance_history) {
+                    this.updateChart(data.attendance_history);
+                }
+                
+                // Update at-risk employees
+                if (data.at_risk_employees) {
+                    this.updateAtRiskEmployees(data.at_risk_employees);
+                }
+                
+                // Update last updated time
+                document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
+            }
+
+            updateMetrics(metrics) {
+                document.getElementById('attendance-rate').textContent = `${metrics.attendance_rate}%`;
+                document.getElementById('present-count').textContent = metrics.present_count;
+                document.getElementById('total-employees').textContent = metrics.total_employees;
+                document.getElementById('engagement-score').textContent = Math.round(metrics.engagement_score);
+                
+                // Update attendance change
+                const changeElement = document.getElementById('attendance-change');
+                const change = metrics.week_over_week_change;
+                changeElement.textContent = `${change >= 0 ? '+' : ''}${change}%`;
+                changeElement.className = change >= 0 ? 
+                    'text-green-600 bg-green-100 px-2 py-1 rounded-full text-xs font-medium' :
+                    'text-red-600 bg-red-100 px-2 py-1 rounded-full text-xs font-medium';
+            }
+
+            updateAlerts(alerts) {
+                const container = document.getElementById('alerts-container');
+                container.innerHTML = '';
+                
+                alerts.forEach(alert => {
+                    const alertElement = this.createAlertElement(alert);
+                    container.appendChild(alertElement);
+                });
+            }
+
+            createAlertElement(alert) {
+                const div = document.createElement('div');
+                const severityColors = {
+                    critical: 'border-red-500 bg-red-50',
+                    high: 'border-orange-500 bg-orange-50',
+                    medium: 'border-yellow-500 bg-yellow-50',
+                    low: 'border-blue-500 bg-blue-50'
+                };
+                
+                div.className = `border-l-4 p-3 rounded ${severityColors[alert.severity] || 'border-gray-500 bg-gray-50'}`;
+                div.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="font-medium text-sm">${alert.title}</div>
+                            <div class="text-xs text-gray-600 mt-1">${alert.message}</div>
+                        </div>
+                        <button onclick="dashboard.acknowledgeAlert('${alert.id}')" 
+                                class="text-xs bg-white px-2 py-1 rounded hover:bg-gray-100">
+                            ✓
+                        </button>
+                    </div>
+                `;
+                
+                return div;
+            }
+
+            updateRegionalData(regionalData) {
+                const regionalGrid = document.getElementById('regional-managers-grid');
+                const areaGrid = document.getElementById('area-managers-grid');
+                
+                // Clear both grids
+                regionalGrid.innerHTML = '';
+                areaGrid.innerHTML = '';
+                
+                // Separate Regional and Area Managers
+                const regionalManagers = regionalData.filter(manager => manager.manager_title === 'Regional Manager');
+                const areaManagers = regionalData.filter(manager => manager.manager_title === 'Area Manager');
+                
+                // Populate Regional Managers grid
+                regionalManagers.forEach(manager => {
+                    const managerElement = this.createRegionElement(manager);
+                    regionalGrid.appendChild(managerElement);
+                });
+                
+                // Populate Area Managers grid
+                areaManagers.forEach(manager => {
+                    const managerElement = this.createRegionElement(manager);
+                    areaGrid.appendChild(managerElement);
+                });
+            }
+
+            createRegionElement(region) {
+                const div = document.createElement('div');
+                const isGood = region.attendance_rate >= 85;
+                const statusClass = isGood ? 'text-green-600' : 'text-red-600';
+                const managerStatusClass = region.manager_current_status === 'Present' ? 'text-green-600' : 'text-red-600';
+                
+                div.className = `p-4 border rounded-lg ${isGood ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`;
+                div.innerHTML = `
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="font-medium">${region.manager_name || region.region_name}</h4>
+                        <span class="${statusClass} text-sm font-medium">${region.attendance_rate}%</span>
+                    </div>
+                    
+                    <!-- Manager Personal Info -->
+                    <div class="mb-3 p-2 bg-white bg-opacity-50 rounded">
+                        <div class="text-xs font-medium text-gray-700 mb-1">Manager Performance</div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm">${region.manager_title || 'Manager'}</span>
+                            <span class="${managerStatusClass} text-xs font-medium">
+                                ${region.manager_current_status || 'Unknown'} • ${region.manager_personal_attendance || 0}%
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <!-- Team Performance -->
+                    <div class="space-y-1">
+                        <div class="text-xs font-medium text-gray-700">Team Performance</div>
+                        <div class="text-sm text-gray-600">
+                            ${region.team_present_count || region.present_count}/${region.team_size || region.total_employees} present today
+                        </div>
+                        <div class="text-sm text-gray-600">
+                            Engagement: ${region.team_engagement_score || 0}% • 4-week: ${region.team_four_week_rate || 0}%
+                        </div>
+                        ${(region.team_at_risk_count || region.at_risk_count) > 0 ? `<div class="text-sm text-red-600">⚠️ ${region.team_at_risk_count || region.at_risk_count} at risk</div>` : ''}
+                    </div>
+                `;
+                
+                return div;
+            }
+
+            updateChart(historyData) {
+                const ctx = document.getElementById('trendChart').getContext('2d');
+                
+                // Destroy existing chart if it exists
+                if (this.chartInstance) {
+                    this.chartInstance.destroy();
+                }
+                
+                // Prepare data for Chart.js
+                const labels = historyData.data.map(point => {
+                    const date = new Date(point.date);
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                });
+                
+                const attendanceData = historyData.data.map(point => point.attendance_rate);
+                
+                // Create new chart
+                this.chartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Attendance Rate (%)',
+                            data: attendanceData,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointBackgroundColor: '#3b82f6',
+                            pointBorderColor: '#ffffff',
+                            pointBorderWidth: 2,
+                            pointRadius: 6,
+                            pointHoverRadius: 8
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                titleColor: '#ffffff',
+                                bodyColor: '#ffffff',
+                                borderColor: '#3b82f6',
+                                borderWidth: 1,
+                                callbacks: {
+                                    label: function(context) {
+                                        return `Attendance: ${context.parsed.y.toFixed(1)}%`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: {
+                                    display: false
+                                },
+                                ticks: {
+                                    color: '#6b7280'
+                                }
+                            },
+                            y: {
+                                beginAtZero: false,
+                                min: Math.max(0, Math.min(...attendanceData) - 5),
+                                max: Math.min(100, Math.max(...attendanceData) + 5),
+                                grid: {
+                                    color: '#f3f4f6'
+                                },
+                                ticks: {
+                                    color: '#6b7280',
+                                    callback: function(value) {
+                                        return value + '%';
+                                    }
+                                }
+                            }
+                        },
+                        interaction: {
+                            mode: 'nearest',
+                            axis: 'x',
+                            intersect: false
+                        }
+                    }
+                });
+            }
+
+            updateTime() {
+                const now = new Date();
+                document.getElementById('current-time').textContent = now.toLocaleTimeString();
+            }
+
+            updateConnectionStatus(status) {
+                const statusElement = document.getElementById('connection-status');
+                const indicator = statusElement.querySelector('.status-indicator');
+                const text = statusElement.querySelector('span');
+                
+                switch (status) {
+                    case 'connected':
+                        indicator.className = 'status-indicator status-online';
+                        text.textContent = 'Connected';
+                        statusElement.className = 'fixed bottom-4 right-4 bg-white rounded-lg shadow-lg p-3 border-l-4 border-green-500';
+                        break;
+                    case 'disconnected':
+                        indicator.className = 'status-indicator status-critical';
+                        text.textContent = 'Disconnected';
+                        statusElement.className = 'fixed bottom-4 right-4 bg-white rounded-lg shadow-lg p-3 border-l-4 border-red-500';
+                        break;
+                    case 'error':
+                        indicator.className = 'status-indicator status-warning';
+                        text.textContent = 'Connection Error';
+                        statusElement.className = 'fixed bottom-4 right-4 bg-white rounded-lg shadow-lg p-3 border-l-4 border-yellow-500';
+                        break;
+                }
+            }
+
+            setupEventListeners() {
+                document.getElementById('refresh-btn').addEventListener('click', () => {
+                    this.loadInitialData();
+                });
+            }
+
+            async acknowledgeAlert(alertId) {
+                try {
+                    await fetch('/api/alerts/acknowledge', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ alert_id: alertId })
+                    });
+                } catch (error) {
+                    console.error('Error acknowledging alert:', error);
+                }
+            }
+
+            removeAlert(alertId) {
+                // Remove alert from UI
+                const alerts = document.querySelectorAll('#alerts-container > div');
+                alerts.forEach(alert => {
+                    if (alert.innerHTML.includes(alertId)) {
+                        alert.remove();
+                    }
+                });
+            }
+
+            showMetricDetails(metric) {
+                let content = '';
+                switch (metric) {
+                    case 'attendance':
+                        content = this.createAttendanceDetails();
+                        break;
+                    case 'present':
+                        this.showPresentDetails();
+                        return;
+                    // Add other cases here for different metrics
+                    default:
+                        console.log('Unknown metric:', metric);
+                        return;
+                }
+                this.showModal(content);
+            }
+
+            createAttendanceDetails() {
+                const attendanceRate = document.getElementById('attendance-rate').textContent;
+                const attendanceChange = document.getElementById('attendance-change').textContent;
+                const presentCount = document.getElementById('present-count').textContent;
+                const totalEmployees = document.getElementById('total-employees').textContent;
+                
+                return `
+                    <div class="p-6 border-b border-gray-200">
+                        <h2 class="text-xl font-semibold text-gray-900 mb-2">📊 Attendance Rate Details</h2>
+                        <p class="text-gray-600">Comprehensive attendance insights and metrics</p>
+                    </div>
+                    <div class="p-6 space-y-6">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-blue-50 p-4 rounded-lg">
+                                <h3 class="font-medium text-blue-900 mb-1">Current Rate</h3>
+                                <p class="text-2xl font-bold text-blue-700">${attendanceRate}</p>
+                            </div>
+                            <div class="bg-green-50 p-4 rounded-lg">
+                                <h3 class="font-medium text-green-900 mb-1">Weekly Change</h3>
+                                <p class="text-2xl font-bold text-green-700">${attendanceChange}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="border-t pt-4">
+                            <h3 class="font-medium text-gray-900 mb-3">Key Metrics</h3>
+                            <div class="space-y-2">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Present Today:</span>
+                                    <span class="font-medium">${presentCount} employees</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Total Employees:</span>
+                                    <span class="font-medium">${totalEmployees} employees</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Absent Today:</span>
+                                    <span class="font-medium">${parseInt(totalEmployees) - parseInt(presentCount)} employees</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h3 class="font-medium text-gray-900 mb-2">Insights</h3>
+                            <ul class="text-sm text-gray-600 space-y-1">
+                                <li>• Attendance tracking across all regions</li>
+                                <li>• Real-time updates throughout the day</li>
+                                <li>• Historical trend analysis available</li>
+                                <li>• Automated alerts for significant changes</li>
+                            </ul>
+                        </div>
+                    </div>
+                `;
+            }
+
+            showModal(content) {
+                const modalBackdrop = document.createElement('div');
+                modalBackdrop.className = 'fixed inset-0 flex items-center justify-center z-50 modal-backdrop';
+                modalBackdrop.innerHTML = `
+                    <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 overflow-hidden modal-content">
+                        ${content}
+                        <div class="flex justify-end p-4 border-t border-gray-200 bg-gray-50">
+                            <button class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-md transition-colors"
+                                    onclick="document.body.removeChild(this.closest('.modal-backdrop'))">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                // Close modal when clicking backdrop
+                modalBackdrop.addEventListener('click', (e) => {
+                    if (e.target === modalBackdrop) {
+                        document.body.removeChild(modalBackdrop);
+                    }
+                });
+                
+                document.body.appendChild(modalBackdrop);
+            }
+
+            updateAtRiskEmployees(atRiskData) {
+                const tableBody = document.getElementById('at-risk-table');
+                tableBody.innerHTML = '';
+                
+                if (!atRiskData || atRiskData.length === 0) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td colspan="5" class="text-center py-8 text-gray-500">
+                            <div class="text-4xl mb-2">✅</div>
+                            <div>No employees at risk - Great job!</div>
+                        </td>
+                    `;
+                    tableBody.appendChild(row);
+                    return;
+                }
+                
+                atRiskData.forEach(employee => {
+                    const row = document.createElement('tr');
+                    row.className = 'border-b hover:bg-gray-50';
+                    
+                    // Determine risk level color
+                    let riskBadgeClass = 'bg-gray-100 text-gray-800';
+                    if (employee.risk_score >= 80) {
+                        riskBadgeClass = 'bg-red-100 text-red-800';
+                    } else if (employee.risk_score >= 60) {
+                        riskBadgeClass = 'bg-orange-100 text-orange-800';
+                    } else if (employee.risk_score >= 40) {
+                        riskBadgeClass = 'bg-yellow-100 text-yellow-800';
+                    }
+                    
+                    row.innerHTML = `
+                        <td class="py-3 pr-4">
+                            <div class="font-medium text-gray-900">${employee.name}</div>
+                            <div class="text-sm text-gray-500">${employee.role}</div>
+                        </td>
+                        <td class="py-3 pr-4">
+                            <div class="text-sm text-gray-900">${employee.location}</div>
+                        </td>
+                        <td class="py-3 pr-4">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${riskBadgeClass}">
+                                ${employee.risk_score}%
+                            </span>
+                        </td>
+                        <td class="py-3 pr-4">
+                            <div class="text-sm text-gray-900">${employee.four_week_rate}%</div>
+                            <div class="text-xs text-gray-500">${employee.current_streak} days absent</div>
+                        </td>
+                        <td class="py-3">
+                            <button class="text-blue-600 hover:text-blue-900 text-sm font-medium" 
+                                    onclick="dashboard.contactEmployee('${employee.id}')">
+                                Contact
+                            </button>
+                        </td>
+                    `;
+                    
+                    tableBody.appendChild(row);
+                });
+                
+                // Update the at-risk count in the metrics
+                document.getElementById('at-risk-count').textContent = atRiskData.length;
+            }
+
+            async contactEmployee(employeeId) {
+                try {
+                    const response = await fetch('/api/employees/contact', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ employee_id: employeeId })
+                    });
+                    
+                    if (response.ok) {
+                        // Show success message or update UI
+                        console.log('Employee contact initiated successfully');
+                        // You could show a toast notification here
+                    } else {
+                        console.error('Failed to initiate employee contact');
+                    }
+                } catch (error) {
+                    console.error('Error contacting employee:', error);
+                }
+            }
+
+            async showPresentDetails() {
+                try {
+                    // First, get available dates
+                    const datesResponse = await fetch('/api/dashboard/available-dates');
+                    const datesData = await datesResponse.json();
+                    
+                    if (!datesData.success || !datesData.dates.length) {
+                        this.showModal(this.createNoDataMessage());
+                        return;
+                    }
+                    
+                    // Get the most recent date
+                    const recentDate = datesData.dates[datesData.dates.length - 1];
+                    
+                    // Get detailed attendance for the most recent date
+                    const attendanceResponse = await fetch(`/api/dashboard/detailed-attendance/${recentDate}`);
+                    const attendanceData = await attendanceResponse.json();
+                    
+                    if (!attendanceData.success || !attendanceData.data) {
+                        this.showModal(this.createNoDataMessage());
+                        return;
+                    }
+                    
+                    // Create and show the detailed attendance modal
+                    const content = this.createPresentDetailsModal(attendanceData.data, datesData.dates);
+                    this.showModal(content);
+                    
+                } catch (error) {
+                    console.error('Error loading present details:', error);
+                    this.showModal(this.createErrorMessage());
+                }
+            }
+
+            createPresentDetailsModal(attendanceData, availableDates) {
+                const presentEmployees = attendanceData.detailed_attendees.filter(emp => emp.status === 'Present');
+                const partialEmployees = attendanceData.detailed_attendees.filter(emp => emp.status === 'Partial');
+                const absentEmployees = attendanceData.detailed_attendees.filter(emp => emp.status === 'Absent');
+                
+                return `
+                    <div class="p-6 border-b border-gray-200">
+                        <h2 class="text-xl font-semibold text-gray-900 mb-2">👥 Detailed Attendance - ${attendanceData.date}</h2>
+                        <p class="text-gray-600">Complete attendance breakdown by employee</p>
+                        
+                        <!-- Date Selector -->
+                        <div class="mt-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Select Date:</label>
+                            <select id="date-selector" class="border border-gray-300 rounded-md px-3 py-2 bg-white" onchange="dashboard.loadAttendanceForDate(this.value)">
+                                ${availableDates.map(date => `<option value="${date}" ${date === attendanceData.date ? 'selected' : ''}>${date}</option>`).join('')}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="p-6 max-h-96 overflow-y-auto">
+                        <!-- Summary Stats -->
+                        <div class="grid grid-cols-3 gap-4 mb-6">
+                            <div class="bg-green-50 p-4 rounded-lg text-center">
+                                <div class="text-2xl font-bold text-green-700">${presentEmployees.length}</div>
+                                <div class="text-sm text-green-600">Present</div>
+                            </div>
+                            <div class="bg-yellow-50 p-4 rounded-lg text-center">
+                                <div class="text-2xl font-bold text-yellow-700">${partialEmployees.length}</div>
+                                <div class="text-sm text-yellow-600">Partial</div>
+                            </div>
+                            <div class="bg-red-50 p-4 rounded-lg text-center">
+                                <div class="text-2xl font-bold text-red-700">${absentEmployees.length}</div>
+                                <div class="text-sm text-red-600">Absent</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Attendance Rate Bar -->
+                        <div class="mb-6">
+                            <div class="flex justify-between text-sm text-gray-600 mb-2">
+                                <span>Attendance Rate</span>
+                                <span>${attendanceData.attendance_rate}%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-3">
+                                <div class="bg-green-500 h-3 rounded-full" style="width: ${attendanceData.attendance_rate}%"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Employee List -->
+                        <div class="space-y-4">
+                            ${presentEmployees.length > 0 ? `
+                                <div>
+                                    <h3 class="font-medium text-green-700 mb-3">✅ Present (${presentEmployees.length})</h3>
+                                    <div class="space-y-2">
+                                        ${presentEmployees.map(emp => this.createEmployeeCard(emp, 'present')).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                            
+                            ${partialEmployees.length > 0 ? `
+                                <div>
+                                    <h3 class="font-medium text-yellow-700 mb-3">⚠️ Partial (${partialEmployees.length})</h3>
+                                    <div class="space-y-2">
+                                        ${partialEmployees.map(emp => this.createEmployeeCard(emp, 'partial')).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                            
+                            ${absentEmployees.length > 0 ? `
+                                <div>
+                                    <h3 class="font-medium text-red-700 mb-3">❌ Absent (${absentEmployees.length})</h3>
+                                    <div class="space-y-2">
+                                        ${absentEmployees.map(emp => this.createEmployeeCard(emp, 'absent')).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+
+            createEmployeeCard(employee, status) {
+                const statusColors = {
+                    present: 'border-green-200 bg-green-50',
+                    partial: 'border-yellow-200 bg-yellow-50',
+                    absent: 'border-red-200 bg-red-50'
+                };
+                
+                return `
+                    <div class="border rounded-lg p-3 ${statusColors[status]}">
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1">
+                                <div class="font-medium text-gray-900">${employee.name}</div>
+                                <div class="text-sm text-gray-600">${employee.title} • ${employee.department}</div>
+                                <div class="text-xs text-gray-500">${employee.office}</div>
+                            </div>
+                            <div class="text-right text-sm">
+                                ${status === 'present' ? `
+                                    <div class="text-green-700">Duration: ${employee.duration}</div>
+                                    ${employee.engagement_score > 0 ? `<div class="text-green-600">Score: ${employee.engagement_score}</div>` : ''}
+                                ` : status === 'partial' ? `
+                                    <div class="text-yellow-700">Duration: ${employee.duration}</div>
+                                ` : `
+                                    <div class="text-red-700">Not Present</div>
+                                `}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            async loadAttendanceForDate(selectedDate) {
+                try {
+                    const response = await fetch(`/api/dashboard/detailed-attendance/${selectedDate}`);
+                    const data = await response.json();
+                    
+                    if (data.success && data.data) {
+                        // Close current modal and show new one
+                        const currentModal = document.querySelector('.modal-backdrop');
+                        if (currentModal) {
+                            document.body.removeChild(currentModal);
+                        }
+                        
+                        // Get available dates again
+                        const datesResponse = await fetch('/api/dashboard/available-dates');
+                        const datesData = await datesResponse.json();
+                        
+                        const content = this.createPresentDetailsModal(data.data, datesData.dates);
+                        this.showModal(content);
+                    }
+                } catch (error) {
+                    console.error('Error loading attendance for date:', error);
+                }
+            }
+
+            createNoDataMessage() {
+                return `
+                    <div class="p-6 border-b border-gray-200">
+                        <h2 class="text-xl font-semibold text-gray-900 mb-2">📊 No Attendance Data</h2>
+                        <p class="text-gray-600">No attendance data available at this time.</p>
+                    </div>
+                    <div class="p-6 text-center">
+                        <div class="text-6xl mb-4">📂</div>
+                        <p class="text-gray-500">Please check back later or contact your administrator.</p>
+                    </div>
+                `;
+            }
+
+            createErrorMessage() {
+                return `
+                    <div class="p-6 border-b border-gray-200">
+                        <h2 class="text-xl font-semibold text-gray-900 mb-2">❌ Error Loading Data</h2>
+                        <p class="text-gray-600">There was an error loading the attendance data.</p>
+                    </div>
+                    <div class="p-6 text-center">
+                        <div class="text-6xl mb-4">⚠️</div>
+                        <p class="text-gray-500">Please try again later.</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Initialize dashboard when page loads
+        let dashboard;
+        document.addEventListener('DOMContentLoaded', () => {
+            dashboard = new AttendanceDashboard();
+        });
+    </script>
+</body>
+</html>

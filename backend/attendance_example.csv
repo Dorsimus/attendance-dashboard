@@ -1,0 +1,9 @@
+Date,Employee,Status,Duration
+2025-07-15,john.doe@redstone.com,Present,480
+2025-07-15,jane.smith@redstone.com,Present,465
+2025-07-15,bob.johnson@redstone.com,Absent,0
+2025-07-15,alice.williams@redstone.com,Partial,240
+2025-07-14,john.doe@redstone.com,Present,475
+2025-07-14,jane.smith@redstone.com,Absent,0
+2025-07-14,bob.johnson@redstone.com,Present,480
+2025-07-14,alice.williams@redstone.com,Present,460

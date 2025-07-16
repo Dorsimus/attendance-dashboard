@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # Main application
+  attendance-dashboard:
+    build: .
+    environment:
+      - FLASK_ENV=production
+      - FLASK_DEBUG=False
+      - SECRET_KEY=${SECRET_KEY}
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - MANAGER_USERNAME=${MANAGER_USERNAME}
+      - MANAGER_PASSWORD=${MANAGER_PASSWORD}
+      - HOST=0.0.0.0
+      - PORT=8000
+      - SESSION_COOKIE_SECURE=true
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - attendance-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.attendance.rule=Host(`attendance.yourdomain.com`)"
+      - "traefik.http.routers.attendance.tls=true"
+      - "traefik.http.routers.attendance.tls.certresolver=letsencrypt"
+      - "traefik.http.services.attendance.loadbalancer.server.port=8000"
+
+  # Reverse proxy with SSL
+  traefik:
+    image: traefik:v3.0
+    command:
+      - "--api.dashboard=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=your-email@domain.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      - "--log.level=INFO"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./letsencrypt:/letsencrypt"
+    restart: unless-stopped
+    networks:
+      - attendance-network
+    depends_on:
+      - attendance-dashboard
+
+  # Optional: Database for future use
+  # postgres:
+  #   image: postgres:15
+  #   environment:
+  #     - POSTGRES_DB=attendance_db
+  #     - POSTGRES_USER=attendance_user
+  #     - POSTGRES_PASSWORD=${DB_PASSWORD}
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   restart: unless-stopped
+  #   networks:
+  #     - attendance-network
+
+networks:
+  attendance-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

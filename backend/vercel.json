@@ -1,0 +1,46 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/*.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "app/static/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+    {
+      "src": "/dashboard",
+      "dest": "/app/static/dashboard.html"
+    },
+    {
+      "src": "/admin/(.*)",
+      "dest": "/api/admin/$1"
+    },
+    {
+      "src": "/",
+      "dest": "/app/static/dashboard.html"
+    }
+  ],
+  "functions": {
+    "api/*.py": {
+      "runtime": "python3.9"
+    }
+  },
+  "env": {
+    "SECRET_KEY": "@secret-key",
+    "ADMIN_USERNAME": "@admin-username",
+    "ADMIN_PASSWORD": "@admin-password",
+    "MANAGER_USERNAME": "@manager-username",
+    "MANAGER_PASSWORD": "@manager-password",
+    "DATABASE_URL": "@database-url",
+    "UPSTASH_REDIS_REST_URL": "@upstash-redis-url",
+    "UPSTASH_REDIS_REST_TOKEN": "@upstash-redis-token"
+  }
+}

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏢 Admin Dashboard - Redstone Attendance</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .redstone-gradient {
+            background: linear-gradient(135deg, #ff3443 0%, #0127a2 100%);
+        }
+        
+        .card-shadow {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        .nav-item {
+            transition: all 0.3s ease;
+        }
+        
+        .nav-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.15);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Header -->
+    <header class="redstone-gradient text-white">
+        <div class="container mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <div class="text-2xl font-bold">🏢 Admin Dashboard</div>
+                    <div class="bg-white bg-opacity-20 px-3 py-1 rounded-full text-sm">
+                        System Management
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="text-sm">
+                        <div class="font-medium">Welcome, {{ session.admin_username }}!</div>
+                        <div class="text-xs opacity-80">{{ current_time }}</div>
+                    </div>
+                    <a href="{{ url_for('admin.logout') }}" class="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg transition-colors">
+                        🚪 Logout
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-6 py-8">
+        <!-- Quick Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white rounded-xl card-shadow p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="text-sm font-medium text-gray-500">UPLOADED FILES</div>
+                    <div class="text-2xl">📁</div>
+                </div>
+                <div class="text-3xl font-bold text-gray-900 mb-2" id="total-files">--</div>
+                <div class="text-sm text-gray-500">Total files managed</div>
+            </div>
+
+            <div class="bg-white rounded-xl card-shadow p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="text-sm font-medium text-gray-500">LAST PROCESSED</div>
+                    <div class="text-2xl">⏱️</div>
+                </div>
+                <div class="text-lg font-bold text-gray-900 mb-2" id="last-processed">--</div>
+                <div class="text-sm text-gray-500">Most recent update</div>
+            </div>
+
+            <div class="bg-white rounded-xl card-shadow p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="text-sm font-medium text-gray-500">SYSTEM STATUS</div>
+                    <div class="text-2xl">✅</div>
+                </div>
+                <div class="text-lg font-bold text-green-600 mb-2">Online</div>
+                <div class="text-sm text-gray-500">All systems operational</div>
+            </div>
+        </div>
+
+        <!-- Navigation Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- File Upload -->
+            <div class="bg-white rounded-xl card-shadow p-6 nav-item cursor-pointer" onclick="window.location.href='{{ url_for('admin.upload_page') }}'">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="text-4xl">📤</div>
+                    <div class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                        Upload
+                    </div>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Upload Files</h3>
+                <p class="text-gray-600 text-sm mb-4">Upload new People Hub Directory or Attendance files to update the system.</p>
+                <div class="flex items-center text-blue-600 text-sm font-medium">
+                    <span>Manage uploads</span>
+                    <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- File History -->
+            <div class="bg-white rounded-xl card-shadow p-6 nav-item cursor-pointer" onclick="loadFileHistory()">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="text-4xl">📋</div>
+                    <div class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
+                        History
+                    </div>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">File History</h3>
+                <p class="text-gray-600 text-sm mb-4">View and manage all previously uploaded files and their processing status.</p>
+                <div class="flex items-center text-green-600 text-sm font-medium">
+                    <span>View history</span>
+                    <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- System Status -->
+            <div class="bg-white rounded-xl card-shadow p-6 nav-item cursor-pointer" onclick="loadSystemStatus()">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="text-4xl">⚙️</div>
+                    <div class="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-medium">
+                        System
+                    </div>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">System Status</h3>
+                <p class="text-gray-600 text-sm mb-4">Monitor system health, performance metrics, and configuration settings.</p>
+                <div class="flex items-center text-purple-600 text-sm font-medium">
+                    <span>Check status</span>
+                    <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Data Validation -->
+            <div class="bg-white rounded-xl card-shadow p-6 nav-item cursor-pointer" onclick="loadDataValidation()">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="text-4xl">🔍</div>
+                    <div class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium">
+                        Validate
+                    </div>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Data Validation</h3>
+                <p class="text-gray-600 text-sm mb-4">Review and validate uploaded data before processing into the system.</p>
+                <div class="flex items-center text-yellow-600 text-sm font-medium">
+                    <span>Validate data</span>
+                    <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- User Management -->
+            <div class="bg-white rounded-xl card-shadow p-6 nav-item cursor-pointer" onclick="loadUserManagement()">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="text-4xl">👥</div>
+                    <div class="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium">
+                        Users
+                    </div>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">User Management</h3>
+                <p class="text-gray-600 text-sm mb-4">Manage admin users, permissions, and access control settings.</p>
+                <div class="flex items-center text-red-600 text-sm font-medium">
+                    <span>Manage users</span>
+                    <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Main Dashboard -->
+            <div class="bg-white rounded-xl card-shadow p-6 nav-item cursor-pointer" onclick="window.open('{{ url_for('dashboard') }}', '_blank')">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="text-4xl">📊</div>
+                    <div class="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full text-sm font-medium">
+                        View
+                    </div>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Main Dashboard</h3>
+                <p class="text-gray-600 text-sm mb-4">Access the main attendance dashboard to view real-time metrics and analytics.</p>
+                <div class="flex items-center text-indigo-600 text-sm font-medium">
+                    <span>Open dashboard</span>
+                    <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Load dashboard stats
+        async function loadDashboardStats() {
+            try {
+                const response = await fetch('/admin/api/files');
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('total-files').textContent = data.files.length;
+                    
+                    if (data.files.length > 0) {
+                        const lastFile = data.files[0]; // Already sorted by upload_time desc
+                        const uploadTime = new Date(lastFile.upload_time);
+                        document.getElementById('last-processed').textContent = uploadTime.toLocaleDateString();
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading dashboard stats:', error);
+            }
+        }
+
+        // Navigation functions
+        function loadFileHistory() {
+            // TODO: Implement file history page
+            alert('File History - Coming Soon!');
+        }
+
+        function loadSystemStatus() {
+            // TODO: Implement system status page
+            alert('System Status - Coming Soon!');
+        }
+
+        function loadDataValidation() {
+            // TODO: Implement data validation page
+            alert('Data Validation - Coming Soon!');
+        }
+
+        function loadUserManagement() {
+            // TODO: Implement user management page
+            alert('User Management - Coming Soon!');
+        }
+
+        // Load stats on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDashboardStats();
+        });
+    </script>
+</body>
+</html>
