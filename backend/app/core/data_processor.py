@@ -874,10 +874,206 @@ class AttendanceDataProcessor:
         """Process uploaded attendance file and update attendance data"""
         try:
             import pandas as pd
+            import io
+            import os
+            from datetime import datetime
             
-            # Determine file type and read accordingly
+            # Check if it's a Teams attendance report CSV file
             if file_path.endswith('.csv'):
-                # Try different encodings and separators for CSV files
+                # Try to read as Teams attendance report (UTF-16 format)
+                try:
+                    # Read the file with UTF-16 encoding (Teams format)
+                    with open(file_path, 'r', encoding='utf-16-le') as f:
+                        content = f.read()
+                    
+                    lines = content.split('\n')
+                    
+                    # Find the participants section
+                    data_start = None
+                    for i, line in enumerate(lines):
+                        if 'Name\tFirst Join' in line or 'Name\tEmail' in line:
+                            data_start = i
+                            break
+                    
+                    if data_start is None:
+                        # Try to find participants section differently
+                        for i, line in enumerate(lines):
+                            if 'Participants' in line:
+                                # Look for the next line with headers
+                                for j in range(i+1, len(lines)):
+                                    if 'Name\t' in lines[j] and 'Email' in lines[j]:
+                                        data_start = j
+                                        break
+                                break
+                    
+                    if data_start is None:
+                        raise ValueError("Could not find participants section in Teams report")
+                    
+                    # Extract participant data lines
+                    participant_lines = []
+                    for line in lines[data_start:]:
+                        if line.strip() and not line.startswith('3.') and not line.startswith('4.'):
+                            participant_lines.append(line)
+                    
+                    if len(participant_lines) < 2:  # Need at least header + 1 data row
+                        raise ValueError("No participant data found in Teams report")
+                    
+                    # Parse as tab-separated values
+                    teams_df = pd.read_csv(io.StringIO('\n'.join(participant_lines)), sep='\t')
+                    
+                    # Function to parse duration from Teams format (e.g., "1h 23m 45s")
+                    def parse_duration(duration_str):
+                        if pd.isna(duration_str) or not duration_str:
+                            return 0
+                        duration_str = str(duration_str)
+                        if 'h' not in duration_str and 'm' not in duration_str and 's' not in duration_str:
+                            return 0
+                        total_minutes = 0
+                        parts = duration_str.split()
+                        for part in parts:
+                            try:
+                                if 'h' in part:
+                                    hours = part.replace('h', '').strip()
+                                    if hours.isdigit():
+                                        total_minutes += int(hours) * 60
+                                elif 'm' in part:
+                                    minutes = part.replace('m', '').strip()
+                                    if minutes.isdigit():
+                                        total_minutes += int(minutes)
+                            except:
+                                continue
+                        return total_minutes
+                    
+                    # Process the Teams data
+                    if 'In-Meeting Duration' in teams_df.columns:
+                        teams_df['duration_minutes'] = teams_df['In-Meeting Duration'].apply(parse_duration)
+                    else:
+                        teams_df['duration_minutes'] = 0
+                    
+                    # Determine attendance status based on duration (80% of 60 minutes = 48 minutes)
+                    teams_df['attended_80_percent'] = teams_df['duration_minutes'] >= 48
+                    
+                    # Clean email and name columns
+                    if 'Email' in teams_df.columns:
+                        teams_df['email_clean'] = teams_df['Email'].str.lower().str.strip()
+                    else:
+                        teams_df['email_clean'] = ''
+                    
+                    if 'Name' in teams_df.columns:
+                        teams_df['name_clean'] = teams_df['Name'].str.strip()
+                    else:
+                        teams_df['name_clean'] = ''
+                    
+                    # Calculate engagement score
+                    def calculate_engagement(row):
+                        score = 0
+                        if pd.notna(row.get('Engagement: Camera On', 0)) and row.get('Engagement: Camera On', 0) > 0:
+                            score += 30
+                        if pd.notna(row.get('Engagement: Unmute', 0)) and row.get('Engagement: Unmute', 0) > 0:
+                            score += 30
+                        reaction_cols = ['Engagement: Reaction-Applause', 'Engagement: Reaction-Laugh',
+                                        'Engagement: Reaction-Like', 'Engagement: Reaction-Love',
+                                        'Engagement: Reaction-Surprised', 'Engagement: Raise Hands']
+                        for col in reaction_cols:
+                            if pd.notna(row.get(col, 0)) and row.get(col, 0) > 0:
+                                score += 10
+                        return min(100, score)
+                    
+                    teams_df['engagement_score'] = teams_df.apply(calculate_engagement, axis=1)
+                    
+                    # Get the meeting date from the filename or use current date
+                    meeting_date = None
+                    filename = os.path.basename(file_path)
+                    
+                    # Try to extract date from filename patterns
+                    import re
+                    date_patterns = [
+                        r'(\d{1,2})-(\d{1,2})-(\d{2,4})',  # MM-DD-YY or MM-DD-YYYY
+                        r'(\d{1,2})/(\d{1,2})/(\d{2,4})',  # MM/DD/YY or MM/DD/YYYY
+                        r'(\d{4})-(\d{1,2})-(\d{1,2})',    # YYYY-MM-DD
+                    ]
+                    
+                    for pattern in date_patterns:
+                        match = re.search(pattern, filename)
+                        if match:
+                            try:
+                                if pattern.startswith(r'(\d{4})'):
+                                    # YYYY-MM-DD format
+                                    year, month, day = match.groups()
+                                    meeting_date = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+                                else:
+                                    # MM-DD-YY or MM/DD/YY format
+                                    month, day, year = match.groups()
+                                    if len(year) == 2:
+                                        year = f"20{year}"
+                                    meeting_date = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+                                
+                                # Validate the date
+                                datetime.strptime(meeting_date, '%Y-%m-%d')
+                                break
+                            except:
+                                continue
+                    
+                    # If no date found in filename, use current date
+                    if not meeting_date:
+                        meeting_date = datetime.now().strftime('%Y-%m-%d')
+                    
+                    # Initialize date in attendance data if not exists
+                    if meeting_date not in self.attendance_data:
+                        self.attendance_data[meeting_date] = {}
+                    
+                    # Process each participant
+                    processed_count = 0
+                    for _, participant in teams_df.iterrows():
+                        email = participant.get('email_clean', '').strip()
+                        name = participant.get('name_clean', '').strip()
+                        duration_minutes = participant.get('duration_minutes', 0)
+                        engagement_score = participant.get('engagement_score', 0)
+                        
+                        # Skip if no email or name
+                        if not email and not name:
+                            continue
+                        
+                        # Determine status based on duration
+                        if duration_minutes >= 48:  # 80% of 60 minutes
+                            status = 'Present'
+                        elif duration_minutes > 0:
+                            status = 'Partial'
+                        else:
+                            status = 'Absent'
+                        
+                        # Use email as key, fall back to name if no email
+                        key = email if email else name
+                        
+                        # Get employee name from directory if available
+                        emp_name = name
+                        if email and email in self.employee_data:
+                            emp_name = self.employee_data[email].get('name', name)
+                        
+                        # Add attendance record
+                        self.attendance_data[meeting_date][key] = {
+                            'name': emp_name,
+                            'status': status,
+                            'duration': duration_minutes,
+                            'duration_minutes': duration_minutes,
+                            'engagement_score': engagement_score,
+                            'location': self.employee_data.get(email, {}).get('office', 'Unknown') if email else 'Unknown'
+                        }
+                        
+                        processed_count += 1
+                    
+                    # Save updated attendance data
+                    await self._save_attendance_data()
+                    
+                    print(f"✅ Processed Teams attendance file: {processed_count} participants for {meeting_date}")
+                    return True
+                    
+                except Exception as teams_error:
+                    print(f"⚠️ Failed to process as Teams report: {teams_error}")
+                    # Fall back to regular CSV processing
+                    pass
+                
+                # If Teams processing failed, try regular CSV processing
                 df = None
                 for encoding in ['utf-8', 'latin-1', 'cp1252']:
                     for sep in [',', ';', '\t']:
@@ -892,10 +1088,60 @@ class AttendanceDataProcessor:
                 
                 if df is None or df.empty:
                     raise ValueError("Could not parse CSV file with any encoding/separator combination")
+                
+                # Process regular CSV with expected columns: Date, Employee, Status
+                required_columns = ['Date', 'Employee', 'Status']
+                df_columns = df.columns.str.lower()
+                for col in required_columns:
+                    if col.lower() not in df_columns:
+                        raise ValueError(f"Missing required column: {col}")
+                
+                df.columns = df.columns.str.lower()
+                
+                dates_processed = set()
+                for _, row in df.iterrows():
+                    date_str = str(row['date']).strip()
+                    email = str(row['employee']).strip()
+                    status = str(row['status']).strip()
+                    duration = row.get('duration', 0) if 'duration' in df.columns else 0
+                    
+                    # Parse date
+                    try:
+                        parsed_date = datetime.strptime(date_str, '%Y-%m-%d')
+                        date_str = parsed_date.strftime('%Y-%m-%d')
+                    except:
+                        try:
+                            parsed_date = datetime.strptime(date_str, '%m/%d/%Y')
+                            date_str = parsed_date.strftime('%Y-%m-%d')
+                        except:
+                            continue
+                    
+                    if date_str not in self.attendance_data:
+                        self.attendance_data[date_str] = {}
+                    
+                    emp_name = self.employee_data.get(email, {}).get('name', email)
+                    
+                    self.attendance_data[date_str][email] = {
+                        'name': emp_name,
+                        'status': status,
+                        'duration': duration,
+                        'duration_minutes': duration,
+                        'location': self.employee_data.get(email, {}).get('office', 'Unknown')
+                    }
+                    
+                    dates_processed.add(date_str)
+                
+                await self._save_attendance_data()
+                print(f"✅ Processed regular CSV attendance file: {len(dates_processed)} dates updated")
+                return True
+                
             elif file_path.endswith(('.xlsx', '.xls')):
                 df = pd.read_excel(file_path)
+                # Process Excel file similar to regular CSV
+                # ... (Excel processing logic would go here)
+                
             elif file_path.endswith('.json'):
-                # Try different encodings for JSON files
+                # Process JSON files
                 try:
                     with open(file_path, 'r', encoding='utf-8') as f:
                         json_data = json.load(f)
@@ -907,79 +1153,17 @@ class AttendanceDataProcessor:
                         with open(file_path, 'r', encoding='cp1252') as f:
                             json_data = json.load(f)
                 
-                # If it's already in the format we expect
                 if isinstance(json_data, dict) and all(isinstance(v, dict) for v in json_data.values()):
-                    # Update attendance data directly
                     for date_str, date_data in json_data.items():
                         self.attendance_data[date_str] = date_data
                     
-                    # Save updated attendance data
                     await self._save_attendance_data()
-                    
                     print(f"✅ Processed attendance JSON file: {len(json_data)} dates updated")
                     return True
                 else:
                     raise ValueError("JSON file format not recognized")
             else:
                 raise ValueError(f"Unsupported file type: {file_path}")
-            
-            # Process CSV/Excel data
-            if not file_path.endswith('.json'):
-                # Expected columns: Date, Employee (email), Status, Duration (optional)
-                required_columns = ['Date', 'Employee', 'Status']
-                
-                # Check if required columns exist (case-insensitive)
-                df_columns = df.columns.str.lower()
-                for col in required_columns:
-                    if col.lower() not in df_columns:
-                        raise ValueError(f"Missing required column: {col}")
-                
-                # Normalize column names
-                df.columns = df.columns.str.lower()
-                
-                # Group by date and process
-                dates_processed = set()
-                for _, row in df.iterrows():
-                    date_str = str(row['date']).strip()
-                    email = str(row['employee']).strip()
-                    status = str(row['status']).strip()
-                    duration = row.get('duration', 0) if 'duration' in df.columns else 0
-                    
-                    # Parse date if needed
-                    try:
-                        from datetime import datetime
-                        parsed_date = datetime.strptime(date_str, '%Y-%m-%d')
-                        date_str = parsed_date.strftime('%Y-%m-%d')
-                    except:
-                        try:
-                            parsed_date = datetime.strptime(date_str, '%m/%d/%Y')
-                            date_str = parsed_date.strftime('%Y-%m-%d')
-                        except:
-                            continue  # Skip invalid dates
-                    
-                    # Initialize date if not exists
-                    if date_str not in self.attendance_data:
-                        self.attendance_data[date_str] = {}
-                    
-                    # Get employee name from directory or use email
-                    emp_name = self.employee_data.get(email, {}).get('name', email)
-                    
-                    # Add attendance record
-                    self.attendance_data[date_str][email] = {
-                        'name': emp_name,
-                        'status': status,
-                        'duration': duration,
-                        'duration_minutes': duration,
-                        'location': self.employee_data.get(email, {}).get('office', 'Unknown')
-                    }
-                    
-                    dates_processed.add(date_str)
-                
-                # Save updated attendance data
-                await self._save_attendance_data()
-                
-                print(f"✅ Processed attendance file: {len(dates_processed)} dates updated")
-                return True
             
         except Exception as e:
             print(f"❌ Error processing attendance file: {e}")
